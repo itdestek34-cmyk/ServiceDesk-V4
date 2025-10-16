@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ServiceDesk v4 - Admin + Dashboard</title>
+<style>
+body { font-family: Arial, sans-serif; margin:0; padding:20px; transition: background 0.3s, color 0.3s;}
+body.light { background: #f5f6fa; color: #000;}
+body.dark { background: #121212; color: #fff;}
+.container { max-width: 900px; margin:auto; background:white; padding:20px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); transition: background 0.3s, color 0.3s;}
+body.dark .container { background:#1e1e1e; }
+h1 { text-align:center; }
+button { padding:10px 16px; margin:5px; border:none; border-radius:6px; cursor:pointer; font-size:16px;}
+button:hover { opacity:0.85;}
+.primary { background:#007bff; color:#fff;}
+.danger { background:#dc3545; color:#fff;}
+.success { background:#28a745; color:#fff;}
+.warning { background:#ffc107; color:#000;}
+input, select, textarea { width:100%; margin-top:5px; padding:10px; border-radius:5px; border:1px solid #ccc; background:inherit; color:inherit; font-size:16px;}
+table { width:100%; border-collapse:collapse; margin-top:10px;}
+th, td { border-bottom:1px solid #ddd; padding:10px; text-align:left;}
+tr:hover { background:#f1f1f1; cursor:pointer; }
+body.dark tr:hover { background:#333;}
+.badge { padding:4px 8px; border-radius:12px; font-size:12px; color:#fff;}
+.badge.Açık { background:#28a745; }
+.badge.Beklemede { background:#ffc107; color:#000; }
+.badge.Çözüldü { background:#6c757d; }
+.topbar { display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; }
+.searchBox { flex:1; }
+#formDiv { display:none; margin-top:15px; padding:15px; border-radius:8px; background:#f9f9f9; }
+body.dark #formDiv { background:#2c2c2c; }
+.stats { display:flex; justify-content:space-around; margin:15px 0; }
+.statBox { background:#f0f0f0; border-radius:10px; padding:10px 20px; text-align:center; flex:1; margin:5px; box-shadow:0 2px 5px rgba(0,0,0,0.1);}
+body.dark .statBox { background:#2c2c2c; }
+.statBox h3 { margin:5px 0; }
+.loginBox { max-width:400px; margin:80px auto; background:white; padding:30px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1); text-align:center; }
+body.dark .loginBox { background:#1e1e1e; }
+.modal { display:none; position:fixed; z-index:10; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; overflow:auto;}
+.modal-content { background:white; padding:20px; border-radius:10px; width:400px; max-width:90%; }
+body.dark .modal-content { background:#2c2c2c; }
+.close { float:right; cursor:pointer; font-size:20px; color:#888; }
+.actions { display:flex; justify-content:space-between; margin-top:15px; flex-wrap:wrap; gap:5px;}
+#notification { position:fixed; top:20px; right:20px; padding:10px 20px; border-radius:5px; background:#28a745; color:#fff; display:none; opacity:0; transition:opacity 0.5s;}
+
+/* Admin Panel */
+#adminPanel { display:none; margin-top:20px; padding:15px; border-radius:8px; background:#f0f0f0; }
+body.dark #adminPanel { background:#2c2c2c; }
+
+/* Chart */
+#statusChart { margin-top:20px; max-width:100%; }
+
+/* ------------------- Responsive ------------------- */
+@media screen and (max-width: 768px) {
+  .topbar { flex-direction: column; gap: 10px; }
+  .searchBox { width: 100%; }
+  table, thead, tbody, th, td, tr { display: block; width: 100%; }
+  th { display: none; }
+  td { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ccc; }
+  td::before { font-weight: bold; content: attr(data-label); }
+  .stats { flex-direction: column; }
+  .statBox { margin:5px 0; }
+  #formDiv { padding:10px; }
+  .actions { flex-direction: column; gap:5px;}
+  button, input, select, textarea { font-size:16px; padding:10px; }
+}
+</style>
+</head>
+<body class="light">
+<div id="notification"></div>
+
+<div id="loginScreen" class="loginBox">
+  <h2>🔐 ServiceDesk Giriş</h2>
+  <input type="text" id="loginUser" placeholder="Kullanıcı adı">
+  <input type="password" id="loginPass" placeholder="Şifre">
+  <button class="primary" onclick="login()">Giriş Yap</button>
+  <p style="font-size:12px;color:gray;margin-top:10px;">Demo kullanıcılar: <b>admin / 1234</b>, <b>user / 0000</b></p>
+</div>
+
+<div id="mainScreen" class="container" style="display:none;">
+  <h1>ServiceDesk v4</h1>
+  <div class="topbar">
+    <button class="primary" onclick="showForm()">+ Yeni Talep</button>
+    <input type="text" id="search" class="searchBox" placeholder="Ara (Başlık, durum...)" onkeyup="renderTickets()">
+    <button class="primary" onclick="toggleTheme()">🌓 Tema Değiştir</button>
+    <button class="primary" onclick="exportCSV()">💾 CSV Dışa Aktar</button>
+    <button class="primary" onclick="logout()">Çıkış</button>
+  </div>
+
+  <div class="stats">
+    <div class="statBox"><h3 id="countOpen">0</h3><p>🟢 Açık</p></div>
+    <div class="statBox"><h3 id="countPending">0</h3><p>🟡 Beklemede</p></div>
+    <div class="statBox"><h3 id="countClosed">0</h3><p>⚫ Çözüldü</p></div>
+  </div>
+
+  <div id="formDiv">
+    <h3>Yeni Talep Oluştur</h3>
+    <input type="text" id="title" placeholder="Talep Başlığı">
+    <textarea id="desc" placeholder="Açıklama"></textarea>
+    <select id="status">
+      <option value="Açık">Açık</option>
+      <option value="Beklemede">Beklemede</option>
+      <option value="Çözüldü">Çözüldü</option>
+    </select>
+    <button class="primary" onclick="addTicket()">Kaydet</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>No</th><th>Başlık</th><th>Durum</th><th>Tarih</th></tr>
+    </thead>
+    <tbody id="ticketTable"></tbody>
+  </table>
+
+  <!-- Admin Panel -->
+  <div id="adminPanel">
+    <h3>👤 Kullanıcı Yönetimi</h3>
+    <input type="text" id="newUserName" placeholder="Kullanıcı adı">
+    <input type="password" id="newUserPass" placeholder="Şifre">
+    <select id="newUserRole">
+      <option value="user">User</option>
+      <option value="admin">Admin</option>
+    </select>
+    <button onclick="addUser()">➕ Kullanıcı Ekle</button>
+    <ul id="userList"></ul>
+  </div>
+
+  <!-- Chart -->
+  <canvas id="statusChart" width="400" height="200"></canvas>
+</div>
+
+<div class="modal" id="detailModal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal()">&times;</span>
+    <h3 id="detailTitle"></h3>
+    <p id="detailDesc"></p>
+    <p><b>Durum:</b> <span id="detailStatus"></span></p>
+    <p><b>Tarih:</b> <span id="detailDate"></span></p>
+    <div class="actions">
+      <select id="updateStatus">
+        <option value="Açık">Açık</option>
+        <option value="Beklemede">Beklemede</option>
+        <option value="Çözüldü">Çözüldü</option>
+      </select>
+      <button class="primary" onclick="updateTicket()">✏️ Güncelle</button>
+      <button class="danger" onclick="deleteTicket()">🗑️ Sil</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Users
+let users = JSON.parse(localStorage.getItem("users")) || [
+  {username:"admin", password:"1234", role:"admin"},
+  {username:"user", password:"0000", role:"user"}
+];
+let currentUser = localStorage.getItem("currentUser") || null;
+let tickets = JSON.parse(localStorage.getItem("tickets")) || [];
+let counter = tickets.length ? Math.max(...tickets.map(t=>t.id))+1 : 1;
+let selectedTicketId = null;
+let currentTheme = localStorage.getItem("theme") || "light";
+document.body.className = currentTheme;
+let chart = null;
+
+// Helpers
+function saveUsers(){ localStorage.setItem("users",JSON.stringify(users)); }
+function saveTickets(){ localStorage.setItem("tickets",JSON.stringify(tickets)); }
+
+// Login / Logout
+function login(){
+  const username=document.getElementById("loginUser").value.trim();
+  const password=document.getElementById("loginPass").value.trim();
+  const userObj=users.find(u=>u.username===username && u.password===password);
+  if(!userObj) return alert("Kullanıcı adı veya şifre hatalı!");
+  currentUser=username;
+  localStorage.setItem("currentUser",username);
+  document.getElementById("loginScreen").style.display="none";
+  document.getElementById("mainScreen").style.display="block";
+  if(userObj.role==="admin"){ document.getElementById("adminPanel").style.display="block"; renderUsers(); }
+  renderTickets();
+}
+
+// Logout
+function logout(){ localStorage.removeItem("currentUser"); currentUser=null; document.getElementById("mainScreen").style.display="none"; document.getElementById("loginScreen").style.display="block"; }
+
+// Tema
+function toggleTheme(){ currentTheme = currentTheme==="light"?"dark":"light"; document.body.className=currentTheme; localStorage.setItem("theme",currentTheme); }
+
+// Tickets
+function showForm(){ document.getElementById("formDiv").style.display="block"; }
+function addTicket(){
+  const title=document.getElementById("title").value.trim();
+  const desc=document.getElementById("desc").value.trim();
+  const status=document.getElementById("status").value;
+  if(!title) return alert("Başlık giriniz!");
+  const date=new Date().toLocaleString();
+  tickets.push({id:counter++,title,desc,status,date,user:currentUser});
+  saveTickets(); renderTickets();
+  document.getElementById("title").value=""; document.getElementById("desc").value=""; document.getElementById("status").value="Açık"; document.getElementById("formDiv").style.display="none";
+  showNotification("Talep eklendi ✅");
+}
+
+function renderTickets(){
+  const tbody=document.getElementById("ticketTable");
+  const search=(document.getElementById("search")?.value||"").toLowerCase();
+  const currentUserObj=users.find(u=>u.username===currentUser);
+  const filtered = tickets.filter(t=> currentUserObj.role==="admin" || t.user===currentUser);
+  tbody.innerHTML="";
+  filtered.filter(t=>t.title.toLowerCase().includes(search)||t.status.toLowerCase().includes(search))
+  .forEach(t=>{
+    tbody.innerHTML+=`<tr onclick="openModal(${t.id})">
+      <td data-label="No">${t.id}</td>
+      <td data-label="Başlık">${t.title}</td>
+      <td data-label="Durum"><span class="badge ${t.status}">${t.status}</span></td>
+      <td data-label="Tarih">${t.date}</td>
+    </tr>`;
+  });
+
+  const counts={Açık:0,Beklemede:0,Çözüldü:0};
+  filtered.forEach(t=>counts[t.status]++);
+  document.getElementById("countOpen").innerText=counts["Açık"];
+  document.getElementById("countPending").innerText=counts["Beklemede"];
+  document.getElementById("countClosed").innerText=counts["Çözüldü"];
+  renderChart(counts);
+}
+
+// Modal
+function openModal(id){
+  const t=tickets.find(x=>x.id===id);
+  if(!t)return;
+  selectedTicketId=id;
+  document.getElementById("detailTitle").innerText=t.title;
+  document.getElementById("detailDesc").innerText=t.desc||"(Açıklama yok)";
+  document.getElementById("detailStatus").innerText=t.status;
+  document.getElementById("detailDate").innerText=t.date;
+  document.getElementById("updateStatus").value=t.status;
+  document.getElementById("detailModal").style.display="flex";
+}
+function closeModal(){ document.getElementById("detailModal").style.display="none"; }
+function updateTicket(){
+  const newStatus=document.getElementById("updateStatus").value;
+  const t=tickets.find(x=>x.id===selectedTicketId);
+  if(t){ t.status=newStatus; saveTickets(); renderTickets(); closeModal(); showNotification("Durum güncellendi ✅"); }
+}
+function deleteTicket(){ if(!confirm("Bu talebi silmek istiyor musunuz?")) return; tickets=tickets.filter(t=>t.id!==selectedTicketId); saveTickets(); renderTickets(); closeModal(); showNotification("Talep silindi 🗑️"); }
+
+// CSV
+function exportCSV(){
+  const currentUserObj=users.find(u=>u.username===currentUser);
+  const filtered = tickets.filter(t=> currentUserObj.role==="admin" || t.user===currentUser);
+  if(!filtered.length) return alert("Dışa aktarılacak talep yok!");
+  let csv="No,Başlık,Durum,Tarih\n";
+  filtered.forEach(t=>csv+=`${t.id},"${t.title}","${t.status}","${t.date}"\n`);
+  const blob=new Blob([csv],{type:"text/csv"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download="tickets.csv"; a.click(); URL.revokeObjectURL(url);
+  showNotification("CSV indirildi 📂");
+}
+
+// Notifications
+function showNotification(msg){
+  const notif=document.getElementById("notification");
+  notif.innerText=msg;
+  notif.style.display="block";
+  notif.style.opacity="1";
+  setTimeout(()=>{notif.style.opacity="0"; setTimeout(()=>{notif.style.display="none";},500);},2000);
+}
+
+// Admin Functions
+function addUser(){
+  const username=document.getElementById("newUserName").value.trim();
+  const password=document.getElementById("newUserPass").value.trim();
+  const role=document.getElementById("newUserRole").value;
+  if(!username || !password){ alert("Tüm alanları doldurun"); return; }
+  if(users.some(u=>u.username===username)){ alert("Kullanıcı zaten var"); return; }
+  users.push({username,password,role});
+  saveUsers(); renderUsers(); showNotification("Yeni kullanıcı eklendi ✅");
+  document.getElementById("newUserName").value=""; document.getElementById("newUserPass").value="";
+}
+function deleteUser(username){
+  if(!confirm("Bu kullanıcıyı silmek istiyor musunuz?")) return;
+  const index=users.findIndex(u=>u.username===username);
+  if(index>-1){ users.splice(index,1); saveUsers(); renderUsers(); showNotification("Kullanıcı silindi 🗑️"); }
+}
+function renderUsers(){
+  const ul=document.getElementById("userList");
+  ul.innerHTML="";
+  users.forEach(u=>{
+    ul.innerHTML+=`<li>${u.username} [${u.role}] ${u.username!=="admin"?`<button onclick="deleteUser('${u.username}')">🗑️ Sil</button>`:""}</li>`;
+  });
+}
+
+// Chart
+function renderChart(counts){
+  const ctx=document.getElementById("statusChart").getContext("2d");
+  if(chart) chart.destroy();
+  chart=new Chart(ctx,{
+    type:'pie',
+    data:{
+      labels:['Açık','Beklemede','Çözüldü'],
+      datasets:[{label:'Talep Durumları',data:[counts['Açık'],counts['Beklemede'],counts['Çözüldü']],backgroundColor:['#28a745','#ffc107','#6c757d']}]
+    },
+    options:{responsive:true,plugins:{legend:{position:'bottom'}}}
+  });
+}
+
+// Init
+if(currentUser){
+  const currentUserObj=users.find(u=>u.username===currentUser);
+  document.getElementById("loginScreen").style.display="none";
+  document.getElementById("mainScreen").style.display="block";
+  if(currentUserObj.role==="admin"){ document.getElementById("adminPanel").style.display="block"; renderUsers(); }
+  renderTickets();
+}
+</script>
+</body>
+</html>
